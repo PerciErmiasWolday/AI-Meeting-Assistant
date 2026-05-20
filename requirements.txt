@@ -1,0 +1,30 @@
+# Core Dependencies
+fastapi==0.109.0
+uvicorn==0.27.0
+python-multipart==0.0.6
+
+# AI & ML
+openai-whisper==20231117
+huggingface-hub
+langchain==0.1.0
+
+# Audio Processing
+pydub==0.25.1
+ffmpeg-python==0.2.0
+
+# Database
+sqlalchemy==2.0.25
+chromadb==0.4.22
+
+# Frontend
+streamlit==1.30.0
+streamlit-extras==0.3.6
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+aiofiles==23.2.1
+
+# PDF Export
+reportlab==4.0.9
+fpdf2==2.7.7

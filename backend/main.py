@@ -24,10 +24,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
+# CORS middleware - restrict to the frontend origin(s), configurable via env.
+# Defaults to the local Streamlit dev server since that's how this app is normally run.
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,15 +90,20 @@ async def upload_audio(
         print("Starting transcription...")
         transcription_result = transcription_service.transcribe_audio(str(file_path))
         transcript = transcription_result["text"]
-        
+
+        if not transcript.strip():
+            raise HTTPException(status_code=400, detail="No speech detected in the uploaded file")
+
         print("Transcription complete!")
-        
+
+        duration = transcription_service.get_duration(str(file_path))
+
         # Summarize transcript
         print("Starting summarization...")
         summary_result = summarization_service.summarize_transcript(transcript)
-        
+
         print("Summarization complete!")
-        
+
         # Save to database
         meeting = Meeting(
             title=title or f"Meeting {timestamp}",
@@ -104,22 +111,26 @@ async def upload_audio(
             transcript=transcript,
             summary=summary_result["summary"],
             action_items=summary_result["action_items"],
+            duration=duration,
             created_at=datetime.utcnow()
         )
-        
+
         db.add(meeting)
         db.commit()
         db.refresh(meeting)
-        
+
         return {
             "id": meeting.id,
             "title": meeting.title,
             "transcript": transcript,
             "summary": summary_result["summary"],
             "action_items": summary_result["action_items"],
+            "duration": meeting.duration,
             "created_at": meeting.created_at.isoformat()
         }
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error processing file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -154,6 +165,7 @@ async def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
         "transcript": meeting.transcript,
         "summary": meeting.summary,
         "action_items": meeting.action_items,
+        "duration": meeting.duration,
         "created_at": meeting.created_at.isoformat()
     }
 
@@ -196,9 +208,12 @@ async def ask_question(
     
     if not meeting.transcript:
         raise HTTPException(status_code=400, detail="No transcript available")
-    
-    answer = summarization_service.answer_question(meeting.transcript, request.question)
-    
+
+    try:
+        answer = summarization_service.answer_question(meeting.transcript, request.question)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to get an answer: {e}")
+
     return {"question": request.question, "answer": answer}
 
 @app.post("/api/email")
@@ -260,4 +275,9 @@ Sent via AI Meeting Summarizer
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app",
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", 8000)),
+        reload=True,
+    )

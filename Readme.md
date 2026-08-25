@@ -1,35 +1,34 @@
-# AI Meeting Summarizer 
+# AI Meeting Summarizer
 
 An AI-powered meeting summarizer that transcribes audio recordings and generates intelligent summaries with action items.
 
 ## Features
 
--  **Audio Transcription** - Powered by OpenAI Whisper
--  **AI Summarization** - Using Google Gemini API
--  **Action Item Extraction** - Automatically identifies tasks
--  **Meeting History** - Store and search past meetings
--  **Ask Questions** - Query your meeting transcripts
--  **Export Options** - PDF and text export (coming soon)
--  **Beautiful UI** - Modern green & white design
+- **Audio Transcription** - Powered by OpenAI Whisper
+- **AI Summarization** - Hugging Face Inference
+- **Action Item Extraction** - Automatically identifies tasks
+- **Meeting History** - Store and search past meetings
+- **Ask Questions** - Query your meeting transcripts
+- **Export Options** - PDF and text export
+- **Beautiful UI** - Modern green & white design
 
-##  Tech Stack
+## Tech Stack
 
 All tools are **100% FREE**:
 
-- **Whisper** - Audio transcription (open-source)
-- **Google Gemini API** - AI summarization (free tier)
+- **Whisper** - Audio transcription, runs locally (open-source)
+- **Hugging Face Inference** - AI summarization, using Mistral-7B-Instruct
 - **FastAPI** - Backend API
 - **Streamlit** - Frontend interface
 - **SQLite** - Database
-- **LangChain** - AI orchestration
 
-##  Prerequisites
+## Prerequisites
 
 - Python 3.10 or higher
-- FFmpeg (for audio processing)
-- Google Gemini API key (free from [Google AI Studio](https://makersuite.google.com/app/apikey))
+- FFmpeg (for audio processing - Whisper needs it to decode audio/video)
+- A Hugging Face access token (free from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
 
-##  Installation
+## Installation
 
 ### 1. Clone or navigate to the project directory
 
@@ -86,13 +85,15 @@ Create a `.env` file in the root directory:
 cp .env.example .env
 ```
 
-Edit `.env` and add your Gemini API key:
+Edit `.env` and add your Hugging Face token:
 
 ```
-GEMINI_API_KEY=your_actual_api_key_here
+HF_TOKEN=your_actual_hf_token_here
 ```
 
-##  Usage
+`ALLOWED_ORIGINS` is optional and controls which frontend origins the backend accepts requests from (comma-separated). It defaults to the local Streamlit dev server (`http://localhost:8501,http://127.0.0.1:8501`), so you only need to set it if you're serving the frontend from somewhere else.
+
+## Usage
 
 ### Start the Backend Server
 
@@ -116,16 +117,16 @@ streamlit run app.py
 
 The app will open in your browser at `http://localhost:8501`
 
-##  How to Use
+## How to Use
 
 1. **Upload Audio** - Click "Upload Meeting" and select your audio file
 2. **Add Title** - Optionally add a meeting title
 3. **Process** - Click "Process Meeting" and wait for AI to work its magic
 4. **View Results** - See your summary, action items, and full transcript
 5. **Ask Questions** - Use the Q&A feature to query your meeting
-6. **Export** - Save your summary (coming soon)
+6. **Export** - Download as PDF, copy the text, or email it to someone
 
-##  Project Structure
+## Project Structure
 
 ```
 meeting-organizer/
@@ -133,7 +134,7 @@ meeting-organizer/
 │   ├── main.py              # FastAPI server
 │   ├── database.py          # Database models
 │   ├── transcription.py    # Whisper integration
-│   └── summarization.py     # Gemini AI integration
+│   └── summarization.py     # Hugging Face summarization
 ├── frontend/
 │   ├── app.py               # Main Streamlit application
 │   ├── components/          # Reusable UI components
@@ -157,7 +158,7 @@ meeting-organizer/
 └── README.md               # This file
 ```
 
-##  Design
+## Design
 
 The app features a **professional, modern design** with:
 - **Color Scheme**: Deep slate grays with blue accents for a professional look
@@ -167,7 +168,7 @@ The app features a **professional, modern design** with:
 - **Interactions**: Smooth transitions and hover effects
 - **Responsive**: Works well on different screen sizes
 
-##  API Endpoints
+## API Endpoints
 
 - `GET /` - Health check
 - `POST /api/upload` - Upload and process audio
@@ -175,18 +176,19 @@ The app features a **professional, modern design** with:
 - `GET /api/meetings/{id}` - Get meeting details
 - `DELETE /api/meetings/{id}` - Delete meeting
 - `POST /api/ask` - Ask questions about a meeting
+- `POST /api/email` - Email a meeting summary (requires SMTP settings in `.env`)
 
-## Tips
+## Security notes
 
-- **Best audio quality** - Use clear recordings for better transcription
-- **Supported formats** - MP3, WAV, M4A, OGG, FLAC, MP4
-- **Processing time** - Depends on audio length (typically 1-3 minutes)
-- **Free tier limits** - Gemini API: 15 requests/min, 1M tokens/month
+This app is built for local/single-user use - there's no login or per-user data isolation, so anyone who can reach the API can read or delete any meeting. `ALLOWED_ORIGINS` restricts which origins the backend will answer, but that's not a substitute for authentication. Turning this into a public, multi-user deployment would need real user accounts and session isolation added on top.
 
-##  Troubleshooting
+## Troubleshooting
 
-**"GEMINI_API_KEY not found"**
-- Make sure you created the `.env` file and added your API key
+**"HF_TOKEN not found"**
+- Make sure you created the `.env` file and added your Hugging Face token
+
+**`openai-whisper` fails to install with a `ModuleNotFoundError: No module named 'pkg_resources'` error**
+- Recent versions of `setuptools` dropped `pkg_resources`, which `openai-whisper`'s old-style build still needs. Fix: `pip install "setuptools<81" wheel`, then `pip install --no-build-isolation -r requirements.txt`.
 
 **"FFmpeg not found"**
 - Install FFmpeg using the instructions above
@@ -197,14 +199,3 @@ The app features a **professional, modern design** with:
 **Slow processing**
 - First run downloads the Whisper model (one-time, ~150MB)
 - Subsequent runs will be faster
-
-## License
-
-This project is open source and available under the MIT License.
-
-## Acknowledgments
-
-- OpenAI Whisper for transcription
-- Google Gemini for AI summarization
-- Streamlit for the amazing framework
-- FastAPI for the robust backend

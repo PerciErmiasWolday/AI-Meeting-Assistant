@@ -35,17 +35,13 @@ class TranscriptionService:
             "segments": result.get("segments", [])
         }
     
-    def get_duration(self, audio_path: str) -> Optional[float]:
-        """Get audio duration in seconds"""
+    def get_duration(self, audio_path: str) -> Optional[int]:
+        """Get media duration in whole seconds. Works for any format ffmpeg supports
+        (mp3, wav, m4a, mp4, ...), not just WAV, since uploads aren't always WAV."""
         try:
-            import wave
-            import contextlib
-            
-            with contextlib.closing(wave.open(audio_path, 'r')) as f:
-                frames = f.getnframes()
-                rate = f.getframerate()
-                duration = frames / float(rate)
-                return duration
+            from pydub import AudioSegment
+            audio = AudioSegment.from_file(audio_path)
+            return int(len(audio) / 1000)
         except Exception as e:
             print(f"Could not get duration: {e}")
             return None

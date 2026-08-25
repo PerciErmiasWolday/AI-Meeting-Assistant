@@ -2,20 +2,34 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 import os
+import json
+import re
 import shutil
 from pathlib import Path
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 import uvicorn
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pydantic import BaseModel
 
-from database import init_db, get_db, Meeting
+from database import init_db, get_db, Meeting, CallRecord
 from transcription import TranscriptionService
 from summarization import SummarizationService
+from extraction import ExtractionService
+
+# Keyword search over CallRecord text fields - same stopword/budget approach as
+# SummarizationService._select_context, just applied to CRM records instead of
+# transcript chunks.
+CRM_CONTEXT_BUDGET = 12000
+_CRM_STOPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "and", "or", "to", "of",
+    "in", "on", "at", "for", "with", "what", "who", "when", "where", "why",
+    "how", "did", "do", "does", "it", "this", "that", "be", "will",
+}
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -38,6 +52,7 @@ app.add_middleware(
 # Initialize services
 transcription_service = TranscriptionService(model_name="base")
 summarization_service = SummarizationService()
+extraction_service = ExtractionService()
 
 # Ensure upload directory exists - relative to project root
 project_root = Path(__file__).parent.parent
@@ -195,6 +210,84 @@ class AskQuestionRequest(BaseModel):
     meeting_id: int
     question: str
 
+class CrmSaveRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    company: Optional[str] = None
+    reason_for_call: Optional[str] = None
+    call_summary: Optional[str] = None
+    next_action: Optional[str] = None
+    call_outcome: Optional[str] = None
+    sentiment: Optional[str] = None
+    important_details: Optional[List[str]] = None
+
+class CrmAskRequest(BaseModel):
+    question: str
+
+def search_call_records(db: Session, question: str, limit: int = 5) -> List[CallRecord]:
+    """Keyword search over reason_for_call, call_summary, and important_details
+    using SQL LIKE - no vector DB. Results are ranked by keyword match count."""
+    words = re.findall(r"[a-z0-9']+", question.lower())
+    # Require 3+ characters - short words cause noisy false-positive substring
+    # matches under LIKE (e.g. "me" matching inside "appointments", "volume").
+    keywords = {w for w in words if len(w) >= 3} - _CRM_STOPWORDS
+    if not keywords:
+        return []
+
+    filters = []
+    for word in keywords:
+        pattern = f"%{word}%"
+        filters.append(CallRecord.reason_for_call.ilike(pattern))
+        filters.append(CallRecord.call_summary.ilike(pattern))
+        filters.append(CallRecord.important_details.ilike(pattern))
+
+    matches = db.query(CallRecord).filter(or_(*filters)).all()
+
+    def match_score(record: CallRecord) -> int:
+        haystack = " ".join(filter(None, [
+            record.reason_for_call, record.call_summary, record.important_details
+        ])).lower()
+        return sum(haystack.count(word) for word in keywords)
+
+    matches.sort(key=match_score, reverse=True)
+    return matches[:limit]
+
+def build_crm_context(db: Session, records: List[CallRecord]) -> str:
+    """Build a compact context string from matched CallRecords. Only pulls in a
+    record's linked meeting transcript when the record has no call_summary of
+    its own to answer from."""
+    blocks = []
+    budget = CRM_CONTEXT_BUDGET
+
+    for record in records:
+        details = ", ".join(json.loads(record.important_details)) if record.important_details else "none"
+        caller = " ".join(filter(None, [record.first_name, record.last_name])) or "unknown"
+        lines = [
+            f"Call record #{record.id} (meeting {record.meeting_id}):",
+            f"Caller: {caller}",
+            f"Company: {record.company or 'unknown'}",
+            f"Reason for call: {record.reason_for_call or 'not recorded'}",
+            f"Summary: {record.call_summary or 'not recorded'}",
+            f"Next action: {record.next_action or 'not recorded'}",
+            f"Outcome: {record.call_outcome or 'not recorded'}",
+            f"Sentiment: {record.sentiment or 'not recorded'}",
+            f"Important details: {details}",
+        ]
+
+        if not record.call_summary:
+            meeting = db.query(Meeting).filter(Meeting.id == record.meeting_id).first()
+            if meeting and meeting.transcript:
+                lines.append(f"Linked transcript (no summary recorded): {meeting.transcript[:2000]}")
+
+        block = "\n".join(lines)
+        if len(block) > budget:
+            break
+        blocks.append(block)
+        budget -= len(block)
+
+    return "\n\n".join(blocks)
+
 @app.post("/api/ask")
 async def ask_question(
     request: AskQuestionRequest,
@@ -215,6 +308,95 @@ async def ask_question(
         raise HTTPException(status_code=502, detail=f"Failed to get an answer: {e}")
 
     return {"question": request.question, "answer": answer}
+
+@app.post("/api/meetings/{meeting_id}/extract-crm")
+async def extract_crm(meeting_id: int, db: Session = Depends(get_db)):
+    """Extract structured CRM data from a meeting's transcript. Does not save it."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    if not meeting.transcript:
+        raise HTTPException(status_code=400, detail="No transcript available")
+
+    try:
+        return extraction_service.extract_crm_data(meeting.transcript)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to extract CRM data: {e}")
+
+@app.post("/api/meetings/{meeting_id}/save-crm")
+async def save_crm(
+    meeting_id: int,
+    request: CrmSaveRequest,
+    db: Session = Depends(get_db)
+):
+    """Save a (possibly user-edited) CRM extraction as a CallRecord linked to the meeting."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    call_record = CallRecord(
+        meeting_id=meeting.id,
+        first_name=request.first_name,
+        last_name=request.last_name,
+        phone_number=request.phone_number,
+        company=request.company,
+        reason_for_call=request.reason_for_call,
+        call_summary=request.call_summary,
+        next_action=request.next_action,
+        call_outcome=request.call_outcome,
+        sentiment=request.sentiment,
+        important_details=json.dumps(request.important_details or []),
+        created_at=datetime.utcnow()
+    )
+
+    try:
+        db.add(call_record)
+        db.commit()
+        db.refresh(call_record)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save CRM data: {e}")
+
+    return {
+        "id": call_record.id,
+        "meeting_id": call_record.meeting_id,
+        "first_name": call_record.first_name,
+        "last_name": call_record.last_name,
+        "phone_number": call_record.phone_number,
+        "company": call_record.company,
+        "reason_for_call": call_record.reason_for_call,
+        "call_summary": call_record.call_summary,
+        "next_action": call_record.next_action,
+        "call_outcome": call_record.call_outcome,
+        "sentiment": call_record.sentiment,
+        "important_details": json.loads(call_record.important_details),
+        "created_at": call_record.created_at.isoformat()
+    }
+
+@app.post("/api/crm/ask")
+async def ask_crm(request: CrmAskRequest, db: Session = Depends(get_db)):
+    """Answer a natural-language question by keyword-searching CallRecords and
+    sending only the matched records (plus transcripts where needed) to the model."""
+    matches = search_call_records(db, request.question)
+
+    if not matches:
+        return {"question": request.question, "answer": "No matching call records found.", "matched_call_ids": []}
+
+    context = build_crm_context(db, matches)
+
+    try:
+        answer = summarization_service.answer_question(context, request.question)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to get an answer: {e}")
+
+    return {
+        "question": request.question,
+        "answer": answer,
+        "matched_call_ids": [record.id for record in matches]
+    }
 
 @app.post("/api/email")
 async def send_email_summary(

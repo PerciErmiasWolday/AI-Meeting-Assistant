@@ -2,17 +2,17 @@
 
 An AI-powered meeting summarizer that transcribes audio recordings and generates intelligent summaries with action items.
 
-## ✨ Features
+## Features
 
-- 🎤 **Audio Transcription** - Powered by OpenAI Whisper
-- 🤖 **AI Summarization** - Using Google Gemini API
-- ✅ **Action Item Extraction** - Automatically identifies tasks
-- 💾 **Meeting History** - Store and search past meetings
-- 💬 **Ask Questions** - Query your meeting transcripts
-- 📄 **Export Options** - PDF and text export (coming soon)
-- 🎨 **Beautiful UI** - Modern green & white design
+-  **Audio Transcription** - Powered by OpenAI Whisper
+-  **AI Summarization** - Using Google Gemini API
+-  **Action Item Extraction** - Automatically identifies tasks
+-  **Meeting History** - Store and search past meetings
+-  **Ask Questions** - Query your meeting transcripts
+-  **Export Options** - PDF and text export (coming soon)
+-  **Beautiful UI** - Modern green & white design
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 All tools are **100% FREE**:
 
@@ -23,13 +23,13 @@ All tools are **100% FREE**:
 - **SQLite** - Database
 - **LangChain** - AI orchestration
 
-## 📋 Prerequisites
+##  Prerequisites
 
 - Python 3.10 or higher
 - FFmpeg (for audio processing)
 - Google Gemini API key (free from [Google AI Studio](https://makersuite.google.com/app/apikey))
 
-## 🚀 Installation
+##  Installation
 
 ### 1. Clone or navigate to the project directory
 
@@ -92,7 +92,7 @@ Edit `.env` and add your Gemini API key:
 GEMINI_API_KEY=your_actual_api_key_here
 ```
 
-## 🎯 Usage
+##  Usage
 
 ### Start the Backend Server
 
@@ -116,7 +116,7 @@ streamlit run app.py
 
 The app will open in your browser at `http://localhost:8501`
 
-## 📖 How to Use
+##  How to Use
 
 1. **Upload Audio** - Click "Upload Meeting" and select your audio file
 2. **Add Title** - Optionally add a meeting title
@@ -125,7 +125,7 @@ The app will open in your browser at `http://localhost:8501`
 5. **Ask Questions** - Use the Q&A feature to query your meeting
 6. **Export** - Save your summary (coming soon)
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 meeting-organizer/
@@ -157,7 +157,7 @@ meeting-organizer/
 └── README.md               # This file
 ```
 
-## 🎨 Design
+##  Design
 
 The app features a **professional, modern design** with:
 - **Color Scheme**: Deep slate grays with blue accents for a professional look
@@ -167,7 +167,7 @@ The app features a **professional, modern design** with:
 - **Interactions**: Smooth transitions and hover effects
 - **Responsive**: Works well on different screen sizes
 
-## 🔧 API Endpoints
+##  API Endpoints
 
 - `GET /` - Health check
 - `POST /api/upload` - Upload and process audio
@@ -176,14 +176,14 @@ The app features a **professional, modern design** with:
 - `DELETE /api/meetings/{id}` - Delete meeting
 - `POST /api/ask` - Ask questions about a meeting
 
-## 💡 Tips
+## Tips
 
 - **Best audio quality** - Use clear recordings for better transcription
 - **Supported formats** - MP3, WAV, M4A, OGG, FLAC, MP4
 - **Processing time** - Depends on audio length (typically 1-3 minutes)
 - **Free tier limits** - Gemini API: 15 requests/min, 1M tokens/month
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 **"GEMINI_API_KEY not found"**
 - Make sure you created the `.env` file and added your API key
@@ -198,17 +198,13 @@ The app features a **professional, modern design** with:
 - First run downloads the Whisper model (one-time, ~150MB)
 - Subsequent runs will be faster
 
-## 📝 License
+## License
 
 This project is open source and available under the MIT License.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - OpenAI Whisper for transcription
 - Google Gemini for AI summarization
 - Streamlit for the amazing framework
 - FastAPI for the robust backend
-
----
-
-**Made with ❤️ using 100% free tools**

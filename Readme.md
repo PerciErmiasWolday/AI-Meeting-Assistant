@@ -1,4 +1,4 @@
-# AI Meeting Summarizer 🎙️
+# AI Meeting Summarizer 
 
 An AI-powered meeting summarizer that transcribes audio recordings and generates intelligent summaries with action items.
 

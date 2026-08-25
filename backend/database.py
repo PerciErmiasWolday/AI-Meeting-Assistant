@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -24,6 +24,27 @@ class Meeting(Base):
     
     def __repr__(self):
         return f"<Meeting(id={self.id}, title='{self.title}', created_at='{self.created_at}')>"
+
+
+class CallRecord(Base):
+    __tablename__ = "call_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False)
+    first_name = Column(String(255), nullable=True)
+    last_name = Column(String(255), nullable=True)
+    phone_number = Column(String(50), nullable=True)
+    company = Column(String(255), nullable=True)
+    reason_for_call = Column(Text, nullable=True)
+    call_summary = Column(Text, nullable=True)
+    next_action = Column(Text, nullable=True)
+    call_outcome = Column(String(255), nullable=True)
+    sentiment = Column(String(50), nullable=True)
+    important_details = Column(Text, nullable=True)  # JSON-encoded
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<CallRecord(id={self.id}, meeting_id={self.meeting_id}, created_at='{self.created_at}')>"
 
 
 # Database setup - ensure path is relative to project root

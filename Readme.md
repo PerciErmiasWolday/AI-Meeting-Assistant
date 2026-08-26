@@ -9,7 +9,7 @@ An AI-powered meeting summarizer that transcribes audio recordings and generates
 - **Action Item Extraction** - Automatically identifies tasks
 - **Meeting History** - Store and search past meetings
 - **Ask Questions** - Query your meeting transcripts
-- **Export Options** - PDF and text export
+- **Export Options** - Email summaries, CSV export of call/CRM data
 - **Beautiful UI** - Modern green & white design
 
 ## Tech Stack
@@ -19,7 +19,7 @@ All tools are **100% FREE**:
 - **Whisper** - Audio transcription, runs locally (open-source)
 - **Hugging Face Inference** - AI summarization, using Mistral-7B-Instruct
 - **FastAPI** - Backend API
-- **Streamlit** - Frontend interface
+- **React** - Frontend interface (Vite + Tailwind CSS)
 - **SQLite** - Database
 
 ## Prerequisites
@@ -91,7 +91,7 @@ Edit `.env` and add your Hugging Face token:
 HF_TOKEN=your_actual_hf_token_here
 ```
 
-`ALLOWED_ORIGINS` is optional and controls which frontend origins the backend accepts requests from (comma-separated). It defaults to the local Streamlit dev server (`http://localhost:8501,http://127.0.0.1:8501`), so you only need to set it if you're serving the frontend from somewhere else.
+`ALLOWED_ORIGINS` is optional and controls which frontend origins the backend accepts requests from (comma-separated). It defaults to the local Vite dev server (`http://localhost:5173,http://127.0.0.1:5173`), so you only need to set it if you're serving the frontend from somewhere else.
 
 ## Usage
 
@@ -111,11 +111,12 @@ The API will be available at `http://localhost:8000`
 Open a **new terminal** and run:
 
 ```bash
-cd frontend
-streamlit run app.py
+cd frontend-react
+npm install
+npm run dev
 ```
 
-The app will open in your browser at `http://localhost:8501`
+The app will open in your browser at `http://localhost:5173`
 
 ## How to Use
 
@@ -124,7 +125,7 @@ The app will open in your browser at `http://localhost:8501`
 3. **Process** - Click "Process Meeting" and wait for AI to work its magic
 4. **View Results** - See your summary, action items, and full transcript
 5. **Ask Questions** - Use the Q&A feature to query your meeting
-6. **Export** - Download as PDF, copy the text, or email it to someone
+6. **Export** - Email a summary, or export call/CRM data as CSV
 
 ## Project Structure
 
@@ -135,22 +136,14 @@ meeting-organizer/
 │   ├── database.py          # Database models
 │   ├── transcription.py    # Whisper integration
 │   └── summarization.py     # Hugging Face summarization
-├── frontend/
-│   ├── app.py               # Main Streamlit application
-│   ├── components/          # Reusable UI components
-│   │   ├── header.py        # Header component
-│   │   ├── sidebar.py       # Sidebar navigation
-│   │   └── cards.py         # Card components
-│   ├── pages/               # Page components
-│   │   ├── upload.py        # Upload page
-│   │   ├── result.py        # Results page
-│   │   └── history.py       # History page
-│   ├── styles/              # Styling files
-│   │   ├── theme.py         # Theme configuration
-│   │   └── main.css         # Main stylesheet
-│   └── utils/               # Utility functions
-│       ├── api.py           # API client functions
-│       └── formatters.py    # Data formatting utilities
+├── frontend-react/
+│   ├── src/
+│   │   ├── App.jsx          # Routes
+│   │   ├── main.jsx         # Entry point
+│   │   ├── components/      # Shared UI (Layout, Sidebar, Modal, etc.)
+│   │   ├── pages/           # Dashboard, Calls, CRM, Ask AI, Analytics, Settings
+│   │   └── lib/             # API client, toast, CSV export helpers
+│   └── package.json
 ├── data/                    # SQLite database
 ├── uploads/                 # Uploaded audio files
 ├── requirements.txt         # Python dependencies

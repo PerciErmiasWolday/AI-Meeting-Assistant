@@ -39,8 +39,8 @@ app = FastAPI(
 )
 
 # CORS middleware - restrict to the frontend origin(s), configurable via env.
-# Defaults to the local Streamlit dev server since that's how this app is normally run.
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").split(",")
+# Defaults to the local Vite dev server since that's how this app is normally run.
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,

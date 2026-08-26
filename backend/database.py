@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -21,7 +21,9 @@ class Meeting(Base):
     action_items = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     duration = Column(Integer, nullable=True)  # in seconds
-    
+    crm_extraction = Column(Text, nullable=True)  # JSON-encoded auto-extracted CRM fields, pending review
+    crm_extraction_status = Column(String(20), nullable=True)  # "ready" | "failed" | None (not attempted)
+
     def __repr__(self):
         return f"<Meeting(id={self.id}, title='{self.title}', created_at='{self.created_at}')>"
 
@@ -79,6 +81,19 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     """Initialize the database"""
     Base.metadata.create_all(bind=engine)
+    _add_missing_columns()
+
+def _add_missing_columns():
+    """Lightweight ad hoc migration: create_all only creates missing tables, not
+    missing columns on tables that already exist. Add any new Meeting columns
+    to an existing meetings.db so older databases pick them up."""
+    with engine.connect() as conn:
+        existing_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(meetings)"))}
+        if "crm_extraction" not in existing_columns:
+            conn.execute(text("ALTER TABLE meetings ADD COLUMN crm_extraction TEXT"))
+        if "crm_extraction_status" not in existing_columns:
+            conn.execute(text("ALTER TABLE meetings ADD COLUMN crm_extraction_status VARCHAR(20)"))
+        conn.commit()
 
 def get_db():
     """Get database session"""

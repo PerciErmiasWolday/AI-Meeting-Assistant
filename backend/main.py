@@ -119,6 +119,20 @@ async def upload_audio(
 
         print("Summarization complete!")
 
+        # Auto-extract CRM data as part of the same pipeline. If it fails, that
+        # must not block the upload from completing; the call just falls back
+        # to needing extraction retried manually.
+        print("Starting CRM extraction...")
+        crm_extraction_data = None
+        crm_extraction_status = None
+        try:
+            crm_extraction_data = extraction_service.extract_crm_data(transcript)
+            crm_extraction_status = "ready"
+            print("CRM extraction complete!")
+        except Exception as e:
+            crm_extraction_status = "failed"
+            print(f"CRM auto-extraction failed (can be retried manually): {e}")
+
         # Save to database
         meeting = Meeting(
             title=title or f"Meeting {timestamp}",
@@ -127,12 +141,41 @@ async def upload_audio(
             summary=summary_result["summary"],
             action_items=summary_result["action_items"],
             duration=duration,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            crm_extraction=json.dumps(crm_extraction_data) if crm_extraction_data else None,
+            crm_extraction_status=crm_extraction_status,
         )
 
         db.add(meeting)
         db.commit()
         db.refresh(meeting)
+
+        # Auto-save the extraction straight to the CRM - no manual "Save to CRM"
+        # click required. If this specific write fails, the draft on the meeting
+        # is still there and can be saved manually from the CRM Extraction tab,
+        # same as if extraction itself had failed.
+        if crm_extraction_status == "ready" and crm_extraction_data:
+            try:
+                call_record = CallRecord(
+                    meeting_id=meeting.id,
+                    first_name=crm_extraction_data.get("first_name"),
+                    last_name=crm_extraction_data.get("last_name"),
+                    phone_number=crm_extraction_data.get("phone_number"),
+                    company=crm_extraction_data.get("company"),
+                    reason_for_call=crm_extraction_data.get("reason_for_call"),
+                    call_summary=crm_extraction_data.get("call_summary"),
+                    next_action=crm_extraction_data.get("next_action"),
+                    call_outcome=crm_extraction_data.get("call_outcome"),
+                    sentiment=crm_extraction_data.get("sentiment"),
+                    important_details=json.dumps(crm_extraction_data.get("important_details") or []),
+                    created_at=datetime.utcnow()
+                )
+                db.add(call_record)
+                db.commit()
+                print("Auto-saved extraction to CRM!")
+            except Exception as e:
+                db.rollback()
+                print(f"Auto-save to CRM failed (can be saved manually): {e}")
 
         return {
             "id": meeting.id,
@@ -141,7 +184,9 @@ async def upload_audio(
             "summary": summary_result["summary"],
             "action_items": summary_result["action_items"],
             "duration": meeting.duration,
-            "created_at": meeting.created_at.isoformat()
+            "created_at": meeting.created_at.isoformat(),
+            "crm_extraction": crm_extraction_data,
+            "crm_extraction_status": crm_extraction_status,
         }
 
     except HTTPException:
@@ -160,7 +205,9 @@ async def get_meetings(db: Session = Depends(get_db)):
             "id": m.id,
             "title": m.title,
             "created_at": m.created_at.isoformat(),
-            "has_summary": bool(m.summary)
+            "has_summary": bool(m.summary),
+            "crm_extraction": json.loads(m.crm_extraction) if m.crm_extraction else None,
+            "crm_extraction_status": m.crm_extraction_status
         }
         for m in meetings
     ]
@@ -181,7 +228,9 @@ async def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
         "summary": meeting.summary,
         "action_items": meeting.action_items,
         "duration": meeting.duration,
-        "created_at": meeting.created_at.isoformat()
+        "created_at": meeting.created_at.isoformat(),
+        "crm_extraction": json.loads(meeting.crm_extraction) if meeting.crm_extraction else None,
+        "crm_extraction_status": meeting.crm_extraction_status
     }
 
 @app.delete("/api/meetings/{meeting_id}")
@@ -224,6 +273,23 @@ class CrmSaveRequest(BaseModel):
 
 class CrmAskRequest(BaseModel):
     question: str
+
+def serialize_call_record(record: CallRecord) -> dict:
+    return {
+        "id": record.id,
+        "meeting_id": record.meeting_id,
+        "first_name": record.first_name,
+        "last_name": record.last_name,
+        "phone_number": record.phone_number,
+        "company": record.company,
+        "reason_for_call": record.reason_for_call,
+        "call_summary": record.call_summary,
+        "next_action": record.next_action,
+        "call_outcome": record.call_outcome,
+        "sentiment": record.sentiment,
+        "important_details": json.loads(record.important_details) if record.important_details else [],
+        "created_at": record.created_at.isoformat()
+    }
 
 def search_call_records(db: Session, question: str, limit: int = 5) -> List[CallRecord]:
     """Keyword search over reason_for_call, call_summary, and important_details
@@ -360,21 +426,42 @@ async def save_crm(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to save CRM data: {e}")
 
-    return {
-        "id": call_record.id,
-        "meeting_id": call_record.meeting_id,
-        "first_name": call_record.first_name,
-        "last_name": call_record.last_name,
-        "phone_number": call_record.phone_number,
-        "company": call_record.company,
-        "reason_for_call": call_record.reason_for_call,
-        "call_summary": call_record.call_summary,
-        "next_action": call_record.next_action,
-        "call_outcome": call_record.call_outcome,
-        "sentiment": call_record.sentiment,
-        "important_details": json.loads(call_record.important_details),
-        "created_at": call_record.created_at.isoformat()
-    }
+    return serialize_call_record(call_record)
+
+@app.get("/api/crm/records")
+async def get_crm_records(db: Session = Depends(get_db)):
+    """List all saved CallRecords, most recent first."""
+    records = db.query(CallRecord).order_by(CallRecord.created_at.desc()).all()
+    return [serialize_call_record(r) for r in records]
+
+@app.get("/api/crm/records/{record_id}")
+async def get_crm_record(record_id: int, db: Session = Depends(get_db)):
+    """Get a single CallRecord, including duration/date of its linked meeting."""
+    record = db.query(CallRecord).filter(CallRecord.id == record_id).first()
+
+    if not record:
+        raise HTTPException(status_code=404, detail="CRM record not found")
+
+    data = serialize_call_record(record)
+
+    meeting = db.query(Meeting).filter(Meeting.id == record.meeting_id).first()
+    data["meeting_created_at"] = meeting.created_at.isoformat() if meeting else None
+    data["meeting_duration"] = meeting.duration if meeting else None
+
+    return data
+
+@app.delete("/api/crm/records/{record_id}")
+async def delete_crm_record(record_id: int, db: Session = Depends(get_db)):
+    """Delete a saved CallRecord. Does not touch the linked meeting."""
+    record = db.query(CallRecord).filter(CallRecord.id == record_id).first()
+
+    if not record:
+        raise HTTPException(status_code=404, detail="CRM record not found")
+
+    db.delete(record)
+    db.commit()
+
+    return {"message": "CRM record deleted successfully"}
 
 @app.post("/api/crm/ask")
 async def ask_crm(request: CrmAskRequest, db: Session = Depends(get_db)):

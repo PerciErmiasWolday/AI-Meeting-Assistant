@@ -3,20 +3,30 @@
 
 @theme {
   /* Backgrounds */
-  --color-bg: #faf8f5;
+  --color-bg: #fcfbfa;
   --color-surface: #ffffff;
-  --color-border: #ece4da;
+  --color-border: #e8e4e1;
 
-  /* Brand / primary accent (warm brown) */
-  --color-primary: #6b3a17;
-  --color-primary-hover: #582e12;
-  --color-accent: #f5e9dd;
-  --color-accent-strong: #8b5a2e;
+  /* Brand / primary accent (warm brown) - exact palette values:
+     primary = main brown, primary-hover/accent-strong = darker brown
+     (strong text/icons on tinted brown surfaces, and button hover-darken),
+     accent-medium = medium brown (secondary accents, hover states on text/links).
+     accent is a light tint derived from the medium brown - the palette has no
+     dedicated light-tint swatch, and every icon-circle/pill/badge background
+     in the app needs one, so it's built from the approved medium brown via
+     color-mix rather than introducing an outside color. */
+  --color-primary: #78452f;
+  --color-primary-hover: #5e321f;
+  --color-accent-strong: #5e321f;
+  --color-accent-medium: #8b543b;
+  --color-accent: color-mix(in srgb, #8b543b 14%, white);
 
   /* Text */
-  --color-text: #1a1512;
-  --color-text-secondary: #6b6560;
-  --color-text-muted: #9c9690;
+  --color-text: #171717;
+  --color-text-secondary: #737373;
+  /* Lighter tertiary tint derived from the same muted gray, to preserve the
+     existing two-tier text hierarchy (secondary vs. muted/timestamp text). */
+  --color-text-muted: color-mix(in srgb, #737373 65%, white);
 
   /* Status badges */
   --color-status-green-bg: #e7f3e1;

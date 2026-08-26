@@ -19,9 +19,13 @@ const NAV_ITEMS = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ open, onClose }) {
   return (
-    <aside className="flex h-screen w-[310px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-6">
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[310px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] px-4 pb-6 pt-20 shadow-[4px_0_24px_rgba(0,0,0,0.08)] transition-transform duration-300 ease-out ${
+        open ? "translate-x-0" : "-translate-x-full"
+      }`}
+    >
       <div className="mb-7 flex items-center gap-3 px-2">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]">
           <AudioLines className="h-5 w-5 text-[var(--color-primary)]" strokeWidth={2.25} />
@@ -37,6 +41,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-xl px-3.5 py-4 text-sm font-medium transition-colors duration-150 ${
                 isActive

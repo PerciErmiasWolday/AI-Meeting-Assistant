@@ -190,3 +190,35 @@ class SummarizationService:
         ]
 
         return self._chat(messages, max_tokens=300, temperature=0.5)
+
+    def answer_crm_question(self, context: str, question: str) -> str:
+        """
+        Answer a question directly from retrieved CRM/call records - concise
+        and factual, like a colleague giving a quick answer. Separate from
+        answer_question() (used for single-meeting transcript Q&A) because
+        that prompt's "this is a transcript, only use exact wording" framing
+        caused the model to hedge or deny a fact that was clearly present in
+        a structured CRM field, and to answer with long disclaimers instead
+        of a direct sentence.
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a CRM assistant. Answer using only the call/contact "
+                    "records provided below, directly and concisely - one or two "
+                    "short sentences, the way a colleague would answer a quick "
+                    "question. Do not repeat the question, do not open with "
+                    "greetings or phrases like 'I'm happy to help', and do not "
+                    "add disclaimers when the answer is clearly stated in the "
+                    "records. Do not mention record IDs, meeting IDs, or how the "
+                    "information was retrieved unless asked. If the records "
+                    "genuinely don't contain the answer, say so in one short "
+                    "sentence instead of guessing. If records conflict, note the "
+                    "conflict briefly instead of picking one silently."
+                ),
+            },
+            {"role": "user", "content": f"Records:\n{context}\n\nQuestion: {question}"},
+        ]
+
+        return self._chat(messages, max_tokens=200, temperature=0.3)

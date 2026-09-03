@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, crea
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-import os
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -32,7 +31,10 @@ class CallRecord(Base):
     __tablename__ = "call_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False)
+    # unique=True: one Meeting can have at most one CallRecord - enforced at
+    # the DB level so a retried/concurrent save can never create a duplicate,
+    # not just discouraged client-side.
+    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, unique=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
     phone_number = Column(String(50), nullable=True)
@@ -80,8 +82,20 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     """Initialize the database"""
+    _enable_wal_mode()
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
+    _add_missing_constraints()
+
+def _enable_wal_mode():
+    """WAL mode lets readers and writers work concurrently instead of the
+    default rollback-journal mode, which locks the whole file on any write.
+    Safe here because the db is a local file (not network-mounted) accessed
+    from a single process. A no-op if already enabled - safe to run every
+    startup."""
+    with engine.connect() as conn:
+        conn.execute(text("PRAGMA journal_mode=WAL"))
+        conn.commit()
 
 def _add_missing_columns():
     """Lightweight ad hoc migration: create_all only creates missing tables, not
@@ -94,6 +108,28 @@ def _add_missing_columns():
         if "crm_extraction_status" not in existing_columns:
             conn.execute(text("ALTER TABLE meetings ADD COLUMN crm_extraction_status VARCHAR(20)"))
         conn.commit()
+
+def _add_missing_constraints():
+    """Same idea as _add_missing_columns, for constraints: create_all() only
+    applies unique=True to tables it creates fresh, not existing ones. A
+    unique index enforces the same guarantee as a unique constraint in
+    SQLite. Skipped (with a loud warning, not a crash) if the existing data
+    already has duplicate meeting_ids - that data issue needs a human to
+    look at it, not a startup failure that takes down the whole app."""
+    with engine.connect() as conn:
+        existing_indexes = {row[1] for row in conn.execute(text("PRAGMA index_list(call_records)"))}
+        if "ux_call_records_meeting_id" in existing_indexes:
+            return
+        try:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX ux_call_records_meeting_id ON call_records(meeting_id)"
+            ))
+            conn.commit()
+        except Exception as e:
+            print(
+                f"WARNING: could not add unique index on call_records.meeting_id "
+                f"(likely existing duplicate meeting_ids need manual cleanup first): {e}"
+            )
 
 def get_db():
     """Get database session"""

@@ -1,16 +1,16 @@
-# AI Meeting Summarizer
+# AI Call Intelligence CRM
 
-An AI-powered meeting summarizer that transcribes audio recordings and generates intelligent summaries with action items.
+Upload a call recording and get an AI transcript, summary, and extracted CRM data (contact info, reason for the call, outcome, next steps) - reviewed and saved into a lightweight CRM you can browse and ask questions about.
 
 ## Features
 
 - **Audio Transcription** - Powered by OpenAI Whisper
 - **AI Summarization** - Hugging Face Inference
 - **Action Item Extraction** - Automatically identifies tasks
+- **CRM Extraction** - Pulls caller identity, company, reason for call, outcome, and sentiment out of a transcript, with a manual review/save step before it becomes a CRM contact
+- **Ask AI** - Ask questions across your saved CRM records, with a fallback to unreviewed call transcripts when nothing's been saved yet
 - **Meeting History** - Store and search past meetings
-- **Ask Questions** - Query your meeting transcripts
 - **Export Options** - Email summaries, CSV export of call/CRM data
-- **Beautiful UI** - Modern green & white design
 
 ## Tech Stack
 
@@ -120,11 +120,11 @@ The app will open in your browser at `http://localhost:5173`
 
 ## How to Use
 
-1. **Upload Audio** - Click "Upload Meeting" and select your audio file
-2. **Add Title** - Optionally add a meeting title
-3. **Process** - Click "Process Meeting" and wait for AI to work its magic
-4. **View Results** - See your summary, action items, and full transcript
-5. **Ask Questions** - Use the Q&A feature to query your meeting
+1. **Upload a Recording** - Click "Upload Recording" on the Calls page, drag in a file (or click to choose one), optionally add a title
+2. **Processing** - Transcription, summarization, and CRM extraction all run automatically on upload
+3. **Review & Save** - Extracted CRM fields (caller, company, reason for call, outcome) show up ready to review on the Calls page; save them to create a CRM contact, or edit first if anything's off
+4. **Browse the CRM** - Saved contacts appear on the CRM page with call history and AI summaries
+5. **Ask Questions** - Use Ask AI to query your saved CRM records (and unreviewed calls, if nothing's been saved yet)
 6. **Export** - Email a summary, or export call/CRM data as CSV
 
 ## Project Structure
@@ -151,24 +151,22 @@ meeting-organizer/
 └── README.md               # This file
 ```
 
-## Design
-
-The app features a **professional, modern design** with:
-- **Color Scheme**: Deep slate grays with blue accents for a professional look
-- **Typography**: System fonts for optimal readability and performance
-- **Components**: Standard UI patterns with proper spacing and visual hierarchy
-- **Layout**: Clean, organized structure with clear information architecture
-- **Interactions**: Smooth transitions and hover effects
-- **Responsive**: Works well on different screen sizes
-
 ## API Endpoints
 
 - `GET /` - Health check
-- `POST /api/upload` - Upload and process audio
+- `POST /api/upload` - Upload audio, transcribe, summarize, and auto-extract/save CRM data
 - `GET /api/meetings` - List all meetings
 - `GET /api/meetings/{id}` - Get meeting details
 - `DELETE /api/meetings/{id}` - Delete meeting
-- `POST /api/ask` - Ask questions about a meeting
+- `POST /api/ask` - Ask questions about a meeting's transcript
+- `POST /api/meetings/{id}/extract-crm` - Re-run CRM extraction on a meeting (doesn't save it)
+- `POST /api/meetings/{id}/save-crm` - Save (possibly edited) CRM fields as a contact
+- `GET /api/crm/records` - List saved CRM contacts
+- `GET /api/crm/records/{id}` - Get a single CRM contact
+- `DELETE /api/crm/records/{id}` - Delete a CRM contact
+- `POST /api/crm/ask` - Ask questions across saved CRM records (falls back to unreviewed calls if none match)
+- `GET /api/crm/backfill/candidates` - Preview which meetings are missing a CRM record
+- `POST /api/crm/backfill` - Create CRM records for meetings that are missing one
 - `POST /api/email` - Email a meeting summary (requires SMTP settings in `.env`)
 
 ## Security notes
